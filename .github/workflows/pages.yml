@@ -1,39 +1,31 @@
-# Enable GitHub Pages from the main branch root (legacy/branch deploy).
-# After the first successful enable, every push to main is published
-# automatically; later runs just confirm Pages is still on.
-name: Ensure GitHub Pages
+# Deploy the static sheet to GitHub Pages via official Actions.
+name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
   workflow_dispatch:
 permissions:
-  pages: write
   contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
 jobs:
-  ensure-pages:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Enable Pages from main branch root
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/pages"
-          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
-          code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' "${auth[@]}" "$api")
-          echo "GET pages HTTP $code"
-          cat /tmp/pages.json
-          echo
-          if [ "$code" = "200" ]; then
-            echo "Pages already enabled"
-            exit 0
-          fi
-          code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' -X POST "${auth[@]}" "$api" \
-            -d '{"build_type":"legacy","source":{"branch":"main","path":"/"}}')
-          echo "POST pages HTTP $code"
-          cat /tmp/pages.json
-          echo
-          case "$code" in
-            201|204|409) exit 0 ;;
-            *) echo "Failed to enable GitHub Pages" >&2; exit 1 ;;
-          esac
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
