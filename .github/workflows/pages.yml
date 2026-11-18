@@ -1,0 +1,39 @@
+# Enable GitHub Pages from the main branch root (legacy/branch deploy).
+# After the first successful enable, every push to main is published
+# automatically; later runs just confirm Pages is still on.
+name: Ensure GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  pages: write
+  contents: read
+jobs:
+  ensure-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable Pages from main branch root
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/pages"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' "${auth[@]}" "$api")
+          echo "GET pages HTTP $code"
+          cat /tmp/pages.json
+          echo
+          if [ "$code" = "200" ]; then
+            echo "Pages already enabled"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' -X POST "${auth[@]}" "$api" \
+            -d '{"build_type":"legacy","source":{"branch":"main","path":"/"}}')
+          echo "POST pages HTTP $code"
+          cat /tmp/pages.json
+          echo
+          case "$code" in
+            201|204|409) exit 0 ;;
+            *) echo "Failed to enable GitHub Pages" >&2; exit 1 ;;
+          esac
